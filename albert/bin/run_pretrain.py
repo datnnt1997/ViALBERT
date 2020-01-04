@@ -1,0 +1,2 @@
+def train(configs):
+    NotImplementedError
