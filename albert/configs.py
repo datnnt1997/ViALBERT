@@ -81,3 +81,55 @@ def model_opts(parser):
     group.add('--pruned_heads', '-pruned_heads',
               type=dict, default={},
               help='Is the model used with Torchscript.')
+
+
+def pretrain_opts(parser):
+    parser.add_argument("--data_dir", default=None, type=str, required=True,
+                        help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
+    parser.add_argument("--config_path", default=None, type=str, required=True)
+    parser.add_argument("--vocab_path", default=None, type=str, required=True)
+    parser.add_argument("--output_dir", default=None, type=str, required=True,
+                        help="The output directory where the model predictions and checkpoints will be written.")
+    parser.add_argument("--model_path", default='', type=str)
+    parser.add_argument('--data_name', default='albert', type=str)
+    parser.add_argument("--file_num", type=int, default=10,
+                        help="Number of dynamic masking to pregenerate (with different masks)")
+    parser.add_argument("--reduce_memory", action="store_true",
+                        help="Store training data as on-disc memmaps to massively reduce memory usage")
+    parser.add_argument("--epochs", type=int, default=4,
+                        help="Number of epochs to train for")
+    parser.add_argument("--do_lower_case", action='store_true',
+                        help="Set this flag if you are using an uncased model.")
+
+    parser.add_argument('--num_eval_steps', default=100)
+    parser.add_argument('--num_save_steps', default=200)
+    parser.add_argument("--local_rank", type=int, default=-1,
+                        help="local_rank for distributed training on gpus")
+    parser.add_argument("--weight_decay", default=0.01, type=float,
+                        help="Weight deay if we apply some.")
+    parser.add_argument("--no_cuda", action='store_true',
+                        help="Whether not to use CUDA when available")
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
+                        help="Number of updates steps to accumulate before performing a backward/update pass.")
+    parser.add_argument("--train_batch_size", default=4, type=int,
+                        help="Total batch size for training.")
+    parser.add_argument('--loss_scale', type=float, default=0,
+                        help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
+                             "0 (default value): dynamic loss scaling.\n"
+                             "Positive power of 2: static loss scaling value.\n")
+    parser.add_argument("--warmup_proportion", default=0.1, type=float,
+                        help="Linear warmup over warmup_steps.")
+    parser.add_argument("--adam_epsilon", default=1e-8, type=float,
+                        help="Epsilon for Adam optimizer.")
+    parser.add_argument('--max_grad_norm', default=1.0, type=float)
+    parser.add_argument("--learning_rate", default=0.00176, type=float,
+                        help="The initial learning rate for Adam.")
+    parser.add_argument('--seed', type=int, default=42,
+                        help="random seed for initialization")
+    parser.add_argument('--fp16_opt_level', type=str, default='O2',
+                        help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
+                             "See details at https://nvidia.github.io/apex/amp.html")
+    parser.add_argument('--fp16', action='store_true',
+                        help="Whether to use 16-bit float precision instead of 32-bit")
+
+
