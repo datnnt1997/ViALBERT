@@ -1,2 +1,4 @@
+from albert.inputters.tokenization import FullTokenizer
+
 def train(configs):
-    NotImplementedError
+    tokenizer = FullTokenizer(vocab_file=configs.vocab_path, do_lower_case=configs.do_lower_case)
