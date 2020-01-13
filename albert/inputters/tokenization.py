@@ -1,25 +1,11 @@
-"""
-    Copyright 2020 Ngo Nguyen Trong Dat
-    ALBERT Implementation with forking
-    Clean Pytorch Code from https://github.com/dhlee347/pytorchic-bert
-"""
-
 import collections
-import unicodedata
+import sentencepiece as spm
 import six
 
+import unicodedata
 
-def convert_to_unicode(text):
-    """Converts `text` to Unicode (if it's not already), assuming utf-8 input."""
-    if six.PY3:
-        if isinstance(text, str):
-            return text
-        elif isinstance(text, bytes):
-            return text.decode("utf-8", "ignore")
-        else:
-            raise ValueError("Unsupported string type: %s" % (type(text)))
-    else:
-        raise ValueError("Not running on Python 3?")
+
+SPIECE_UNDERLINE = u"▁".encode("utf-8")
 
 
 def printable_text(text):
@@ -31,44 +17,72 @@ def printable_text(text):
         if isinstance(text, str):
             return text
         elif isinstance(text, bytes):
-            return text.decode("utf-8", "ignore")
+            return six.ensure_text(text, "utf-8", "ignore")
+        else:
+            raise ValueError("Unsupported string type: %s" % (type(text)))
+    elif six.PY2:
+        if isinstance(text, str):
+            return text
+        elif isinstance(text, six.text_type):
+            return six.ensure_binary(text, "utf-8")
         else:
             raise ValueError("Unsupported string type: %s" % (type(text)))
     else:
-        raise ValueError("Not running on Python 3?")
+        raise ValueError("Not running on Python2 or Python 3?")
 
 
 def load_vocab(vocab_file):
     """Loads a vocabulary file into a dictionary."""
     vocab = collections.OrderedDict()
-    index = 0
-    with open(vocab_file, "r", encoding='utf-8') as reader:
-        while True:
-            token = convert_to_unicode(reader.readline())
-            if not token:
-                break
-            token = token.strip()
-            vocab[token] = index
-            index += 1
+    with open(vocab_file, "r", encoding="utf-8") as reader:
+        tokens = reader.readlines()
+    for index, token in enumerate(tokens):
+        token = token.rstrip('\n').split()[0]
+        vocab[token] = index
     return vocab
 
 
-def convert_tokens_to_ids(vocab, tokens):
-    """Converts a sequence of tokens into ids using the vocab."""
-    ids = []
-    for token in tokens:
-        ids.append(vocab[token])
-    return ids
+def _is_punctuation(char):
+    """Checks whether `chars` is a punctuation character."""
+    cp = ord(char)
+    # We treat all non-letter/number ASCII as punctuation.
+    # Characters such as "^", "$", and "`" are not in the Unicode
+    # Punctuation class but we treat them as punctuation anyways, for
+    # consistency.
+    if (33 <= cp <= 47) or (58 <= cp <= 64) or (91 <= cp <= 96) or (123 <= cp <= 126):
+        return True
+    cat = unicodedata.category(char)
+    if cat.startswith("P"):
+        return True
+    return False
 
-def convert_ids_to_tokens(vocab, ids):
-    """Converts a sequence of id into tokens using the vocab."""
-    tokens = []
-    for id in ids:
-        tokens.append(vocab[id])
-    return tokens
+
+def _is_whitespace(char):
+    """Checks whether `chars` is a whitespace character."""
+    # \t, \n, and \r are technically contorl characters but we treat them
+    # as whitespace since they are generally considered as such.
+    if char == " " or char == "\t" or char == "\n" or char == "\r":
+        return True
+    cat = unicodedata.category(char)
+    if cat == "Zs":
+        return True
+    return False
+
+
+def _is_control(char):
+    """Checks whether `chars` is a control character."""
+    # These are technically control characters but we count them as whitespace
+    # characters.
+    if char == "\t" or char == "\n" or char == "\r":
+        return False
+    cat = unicodedata.category(char)
+    if cat.startswith("C"):
+        return True
+    return False
+
 
 def whitespace_tokenize(text):
-    """Runs basic whitespace cleaning and splitting on a peice of text."""
+    """Runs basic whitespace cleaning and splitting on a piece of text."""
     text = text.strip()
     if not text:
         return []
@@ -76,57 +90,11 @@ def whitespace_tokenize(text):
     return tokens
 
 
-class FullTokenizer(object):
-    """Runs end-to-end tokenziation."""
-
-    def __init__(self, vocab_file, do_lower_case=True):
-        self.vocab = load_vocab(vocab_file)
-        self.basic_tokenizer = BasicTokenizer(do_lower_case=do_lower_case)
-        self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.vocab)
-
-    def tokenize(self, text):
-        split_tokens = []
-        for token in self.basic_tokenizer.tokenize(text):
-            for sub_token in self.wordpiece_tokenizer.tokenize(token):
-                split_tokens.append(sub_token)
-
-        return split_tokens
-
-    def convert_tokens_to_ids(self, tokens):
-        return convert_tokens_to_ids(self.vocab, tokens)
-
-    def convert_to_unicode(self, text):
-        return convert_to_unicode(text)
-
-
-
 class BasicTokenizer(object):
     """Runs basic tokenization (punctuation splitting, lower casing, etc.)."""
 
-    def __init__(self, do_lower_case=True):
-        """Constructs a BasicTokenizer.
-
-        Args:
-          do_lower_case: Whether to lower case the input.
-        """
-        self.do_lower_case = do_lower_case
-
-    def tokenize(self, text):
-        """Tokenizes a piece of text."""
-        text = convert_to_unicode(text)
-        text = self._clean_text(text)
-        orig_tokens = whitespace_tokenize(text)
-        split_tokens = []
-        for token in orig_tokens:
-            if self.do_lower_case:
-                token = token.lower()
-                token = self._run_strip_accents(token)
-            split_tokens.extend(self._run_split_on_punc(token))
-
-        output_tokens = whitespace_tokenize(" ".join(split_tokens))
-        return output_tokens
-
-    def _run_strip_accents(self, text):
+    @staticmethod
+    def _run_strip_accents(text):
         """Strips accents from a piece of text."""
         text = unicodedata.normalize("NFD", text)
         output = []
@@ -137,7 +105,8 @@ class BasicTokenizer(object):
             output.append(char)
         return "".join(output)
 
-    def _run_split_on_punc(self, text):
+    @staticmethod
+    def _run_split_on_punc(text):
         """Splits punctuation on a piece of text."""
         chars = list(text)
         i = 0
@@ -157,7 +126,31 @@ class BasicTokenizer(object):
 
         return ["".join(x) for x in output]
 
-    def _clean_text(self, text):
+    @staticmethod
+    def _is_chinese_char(cp):
+        """Checks whether CP is the codepoint of a CJK character."""
+        # This defines a "chinese character" as anything in the CJK Unicode block:
+        #   https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)
+        #
+        # Note that the CJK Unicode block is NOT all Japanese and Korean characters,
+        # despite its name. The modern Korean Hangul alphabet is a different block,
+        # as is Japanese Hiragana and Katakana. Those alphabets are used to write
+        # space-separated words, so they are not treated specially and handled
+        # like the all of the other languages.
+        if ((0x4E00 <= cp <= 0x9FFF) or
+                (0x3400 <= cp <= 0x4DBF) or
+                (0xF900 <= cp <= 0xFAFF) or
+                (0x20000 <= cp <= 0x2A6DF) or
+                (0x2A700 <= cp <= 0x2B73F) or
+                (0x2B740 <= cp <= 0x2B81F) or
+                (0x2B820 <= cp <= 0x2CEAF) or
+                (0x2F800 <= cp <= 0x2FA1F)):
+            return True
+
+        return False
+
+    @staticmethod
+    def _clean_text(text):
         """Performs invalid character removal and whitespace cleanup on text."""
         output = []
         for char in text:
@@ -170,11 +163,56 @@ class BasicTokenizer(object):
                 output.append(char)
         return "".join(output)
 
+    def __init__(self, do_lower_case=False, do_cased=False):
+        """Constructs a BasicTokenizer.
+
+    Args:
+      do_lower_case: Whether to lower case the input.
+    """
+        self.do_lower_case = do_lower_case
+        self.do_cased = do_cased
+
+    def tokenize(self, text):
+        """Tokenizes a piece of text."""
+        text = self._clean_text(text)
+
+        # This was added on November 1st, 2018 for the multilingual and Chinese
+        # models. This is also applied to the English models now, but it doesn't
+        # matter since the English models were not trained on any Chinese data
+        # and generally don't have any Chinese data in them (there are Chinese
+        # characters in the vocabulary because Wikipedia does have some Chinese
+        # words in the English Wikipedia.).
+        text = self._tokenize_chinese_chars(text)
+        orig_tokens = whitespace_tokenize(text)
+        split_tokens = []
+        for token in orig_tokens:
+            if self.do_lower_case:
+                token = token.lower()
+            if self.do_cased:
+                token = self._run_strip_accents(token)
+            split_tokens.extend(self._run_split_on_punc(token))
+
+        output_tokens = whitespace_tokenize(" ".join(split_tokens))
+        return output_tokens
+
+    def _tokenize_chinese_chars(self, text):
+        """Adds whitespace around any CJK character."""
+        output = []
+        for char in text:
+            cp = ord(char)
+            if self._is_chinese_char(cp):
+                output.append(" ")
+                output.append(char)
+                output.append(" ")
+            else:
+                output.append(char)
+        return "".join(output)
+
 
 class WordpieceTokenizer(object):
     """Runs WordPiece tokenization."""
 
-    def __init__(self, vocab, unk_token="[UNK]", max_input_chars_per_word=100):
+    def __init__(self, vocab, unk_token="<unk>", max_input_chars_per_word=100):
         self.vocab = vocab
         self.unk_token = unk_token
         self.max_input_chars_per_word = max_input_chars_per_word
@@ -191,13 +229,11 @@ class WordpieceTokenizer(object):
 
         Args:
           text: A single token or whitespace separated tokens. This should have
-            already been passed through `BasicTokenizer.
+            already been passed through `BasicTokenizer`.
 
         Returns:
           A list of wordpiece tokens.
         """
-
-        text = convert_to_unicode(text)
 
         output_tokens = []
         for token in whitespace_tokenize(text):
@@ -233,41 +269,68 @@ class WordpieceTokenizer(object):
         return output_tokens
 
 
-def _is_whitespace(char):
-    """Checks whether `chars` is a whitespace character."""
-    # \t, \n, and \r are technically contorl characters but we treat them
-    # as whitespace since they are generally considered as such.
-    if char == " " or char == "\t" or char == "\n" or char == "\r":
-        return True
-    cat = unicodedata.category(char)
-    if cat == "Zs":
-        return True
-    return False
+class FullTokenizer(object):
+    """Runs end-to-end tokenziation."""
 
+    @staticmethod
+    def encode_pieces(sp_model, text, return_unicode=True, sample=False):
+        """turn sentences into word pieces."""
 
-def _is_control(char):
-    """Checks whether `chars` is a control character."""
-    # These are technically control characters but we count them as whitespace
-    # characters.
-    if char == "\t" or char == "\n" or char == "\r":
-        return False
-    cat = unicodedata.category(char)
-    if cat.startswith("C"):
-        return True
-    return False
+        if six.PY2 and isinstance(text, six.text_type):
+            text = six.ensure_binary(text, "utf-8")
 
+        if not sample:
+            pieces = sp_model.EncodeAsPieces(text)
+        else:
+            pieces = sp_model.SampleEncodeAsPieces(text, 64, 0.1)
+        new_pieces = []
+        for piece in pieces:
+            piece = printable_text(piece)
+            if len(piece) > 1 and piece[-1] == "," and piece[-2].isdigit():
+                cur_pieces = sp_model.EncodeAsPieces(
+                    six.ensure_binary(piece[:-1]).replace(SPIECE_UNDERLINE, b""))
+                if piece[0] != SPIECE_UNDERLINE and cur_pieces[0][0] == SPIECE_UNDERLINE:
+                    if len(cur_pieces[0]) == 1:
+                        cur_pieces = cur_pieces[1:]
+                    else:
+                        cur_pieces[0] = cur_pieces[0][1:]
+                cur_pieces.append(piece[-1])
+                new_pieces.extend(cur_pieces)
+            else:
+                new_pieces.append(piece)
 
-def _is_punctuation(char):
-    """Checks whether `chars` is a punctuation character."""
-    cp = ord(char)
-    # We treat all non-letter/number ASCII as punctuation.
-    # Characters such as "^", "$", and "`" are not in the Unicode
-    # Punctuation class but we treat them as punctuation anyways, for
-    # consistency.
-    if ((cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or
-            (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126)):
-        return True
-    cat = unicodedata.category(char)
-    if cat.startswith("P"):
-        return True
-    return False
+        # note(zhiliny): convert back to unicode for py2
+        if six.PY2 and return_unicode:
+            ret_pieces = []
+            for piece in new_pieces:
+                if isinstance(piece, str):
+                    piece = six.ensure_text(piece, "utf-8")
+                ret_pieces.append(piece)
+            new_pieces = ret_pieces
+
+        return new_pieces
+
+    def __init__(self, vocab_file, do_lower_case=True, do_cased=False, spm_model_file=None):
+        self.vocab = None
+        self.sp_model = None
+        if spm_model_file:
+            self.sp_model = spm.SentencePieceProcessor()
+            self.sp_model.Load(spm_model_file)
+            # Note(mingdachen): For the purpose of consisent API, we are
+            # generating a vocabulary for the sentence piece tokenizer.
+            self.vocab = {self.sp_model.IdToPiece(i): i for i in range(self.sp_model.GetPieceSize())}
+        else:
+            self.vocab = load_vocab(vocab_file)
+            self.ids_to_tokens = collections.OrderedDict([(ids, tok) for tok, ids in self.vocab.items()])
+            self.basic_tokenizer = BasicTokenizer(do_lower_case=do_lower_case, do_cased=do_cased)
+            self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.vocab)
+
+    def _tokenize(self, text):
+        if self.sp_model:
+            split_tokens = self.encode_pieces(self.sp_model, text, return_unicode=False)
+        else:
+            split_tokens = []
+            for token in self.basic_tokenizer.tokenize(text):
+                for sub_token in self.wordpiece_tokenizer.tokenize(token):
+                    split_tokens.append(sub_token)
+        return split_tokens

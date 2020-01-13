@@ -1,6 +1,5 @@
 import albert.configs as configs
-from albert.bin.run_pretrain import train
-
+from debug import train
 from albert.utils import ArgumentParser
 
 
