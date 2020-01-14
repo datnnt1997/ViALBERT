@@ -82,6 +82,34 @@ def model_opts(parser):
               type=dict, default={},
               help='Is the model used with Torchscript.')
 
+def prepare_data_opts(parser):
+    parser.add_argument("--data_dir", default=None, type=str, required=True,
+                        help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
+    parser.add_argument("--config_path", default=None, type=str, required=True)
+    parser.add_argument("--vocab_path", default=None, type=str, required=True)
+    parser.add_argument("--spm_model_path", default=None, type=str)
+    parser.add_argument("--output_dir", default=None, type=str, required=True,
+                        help="The output directory where the model predictions and checkpoints will be written.")
+
+    parser.add_argument("--do_split", default=False, type=bool, help="Whether to split big file")
+    parser.add_argument("--line_per_file", type=int, default=1000000000, help="Number of line in each file")
+
+    parser.add_argument("--do_whole_word_mask", default=False, type=bool, help="")
+    parser.add_argument("--max_seq_len", type=int, default=128)
+    parser.add_argument('--data_name', default='albert', type=str)
+    parser.add_argument("--file_num", type=int, default=10,
+                        help="Number of dynamic masking to pregenerate (with different masks)")
+    parser.add_argument("--do_lower_case", action='store_true',
+                        help="Set this flag if you are using an uncased model.")
+    parser.add_argument("--do_cased", action='store_true',
+                        help="Set this flag if you are using an uncased model.")
+    parser.add_argument('--max_ngram', default=3, type=int)
+    parser.add_argument("--short_seq_prob", type=float, default=0.1,
+                        help="Probability of making a short sentence as a training example")
+    parser.add_argument("--masked_lm_prob", type=float, default=0.15,
+                        help="Probability of masking each token for the LM task")
+    parser.add_argument("--max_predictions_per_seq", type=int, default=20,  # 128 * 0.15
+                        help="Maximum number of tokens to mask in each sequence")
 
 def pretrain_opts(parser):
     parser.add_argument("--data_dir", default=None, type=str, required=True,
@@ -93,6 +121,7 @@ def pretrain_opts(parser):
                         help="The output directory where the model predictions and checkpoints will be written.")
 
     parser.add_argument("--do_split", default=False, type=bool, help="Whether to split big file")
+    parser.add_argument("--do_whole_word_mask", default=False, type=bool, help="")
     parser.add_argument("--line_per_file", type=int, default=1000000000, help="Number of line in each file")
     parser.add_argument("--max_seq_len", type=int, default=128)
     parser.add_argument("--model_path", default='', type=str)
