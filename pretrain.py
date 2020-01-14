@@ -1,13 +1,12 @@
 import albert.configs as configs
-from albert.bin.run_pretrain import train
-
+from albert.bin.run_prepare_pretraining_data import train
 from albert.utils import ArgumentParser
 
 
 def _get_parser():
     parser = ArgumentParser(description='train.py')
     configs.model_opts(parser)
-    configs.pretrain_opts(parser)
+    configs.prepare_data_opts(parser)
     return parser
 
 
