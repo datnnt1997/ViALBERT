@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 
 from albert.modules.albert_group import AlbertGroup
@@ -8,6 +7,7 @@ class TransformerEncoder(nn.Module):
     def __init__(self, config):
         super(TransformerEncoder, self).__init__()
         # Parameters
+        self.config = config
         self.hiddend_size = config.hidden_size
         self.embedding_size = config.embedding_size
         self.output_hidden_states = config.output_hidden_states

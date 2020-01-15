@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-from albert.modules.embeddings import Embeddings
-from albert.modules.transformer_encoder import TransformerEncoder
-from albert.modules.pooler import Pooler
+from albert.modules import Embeddings
+from albert.modules import TransformerEncoder
+from albert.modules import Pooler
 
 
 class AlbertModel(nn.Module):
@@ -58,7 +58,7 @@ class AlbertModel(nn.Module):
         else:
             head_mask = [None] * self.config.num_hidden_layers
 
-        embedding_output = self.embeddings(input_ids, position_ids=position_ids, token_type_ids=token_type_ids)
+        embedding_output = self.embeddings(input_ids, position_ids=position_ids, segment_ids=token_type_ids)
 
         encoder_outputs = self.encoder(embedding_output, extended_attention_mask, head_mask=head_mask)
 

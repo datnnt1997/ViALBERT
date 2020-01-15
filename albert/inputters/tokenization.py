@@ -5,7 +5,28 @@ import six
 import unicodedata
 
 
-SPIECE_UNDERLINE = u"▁".encode("utf-8")
+SPIECE_UNDERLINE = u"▁"
+
+
+def preprocess_text(inputs, remove_space=True, lower=False, uncased=True):
+  """preprocess data by removing extra space and normalize data."""
+  outputs = inputs
+  if remove_space:
+    outputs = " ".join(inputs.strip().split())
+
+  if six.PY2 and isinstance(outputs, str):
+    try:
+      outputs = six.ensure_text(outputs, "utf-8")
+    except UnicodeDecodeError:
+      outputs = six.ensure_text(outputs, "latin-1")
+
+  outputs = unicodedata.normalize("NFKD", outputs)
+  if uncased:
+    outputs = "".join([c for c in outputs if not unicodedata.combining(c)])
+  if lower:
+    outputs = outputs.lower()
+
+  return outputs
 
 
 def printable_text(text):
@@ -275,20 +296,18 @@ class FullTokenizer(object):
     @staticmethod
     def encode_pieces(sp_model, text, return_unicode=True, sample=False):
         """turn sentences into word pieces."""
-
-        if six.PY2 and isinstance(text, six.text_type):
-            text = six.ensure_binary(text, "utf-8")
-
+        text = preprocess_text(text, )
+        if six.PY2 and isinstance(text, unicode):
+            text = text.encode('utf-8')
         if not sample:
             pieces = sp_model.EncodeAsPieces(text)
         else:
             pieces = sp_model.SampleEncodeAsPieces(text, 64, 0.1)
         new_pieces = []
         for piece in pieces:
-            piece = printable_text(piece)
-            if len(piece) > 1 and piece[-1] == "," and piece[-2].isdigit():
+            if len(piece) > 1 and piece[-1] == ',' and piece[-2].isdigit():
                 cur_pieces = sp_model.EncodeAsPieces(
-                    six.ensure_binary(piece[:-1]).replace(SPIECE_UNDERLINE, b""))
+                    piece[:-1].replace(SPIECE_UNDERLINE, ''))
                 if piece[0] != SPIECE_UNDERLINE and cur_pieces[0][0] == SPIECE_UNDERLINE:
                     if len(cur_pieces[0]) == 1:
                         cur_pieces = cur_pieces[1:]
@@ -304,7 +323,7 @@ class FullTokenizer(object):
             ret_pieces = []
             for piece in new_pieces:
                 if isinstance(piece, str):
-                    piece = six.ensure_text(piece, "utf-8")
+                    piece = piece.decode(piece, "utf-8")
                 ret_pieces.append(piece)
             new_pieces = ret_pieces
 
@@ -327,6 +346,7 @@ class FullTokenizer(object):
 
     def _tokenize(self, text):
         if self.sp_model:
+            text = preprocess_text(text, lower=False, uncased=False)
             split_tokens = self.encode_pieces(self.sp_model, text, return_unicode=False)
         else:
             split_tokens = []
@@ -334,3 +354,22 @@ class FullTokenizer(object):
                 for sub_token in self.wordpiece_tokenizer.tokenize(token):
                     split_tokens.append(sub_token)
         return split_tokens
+
+    def convert_by_vocab(vocab, items):
+        """Converts a sequence of [tokens|ids] using the vocab."""
+        output = []
+        for item in items:
+            output.append(vocab[item])
+        return output
+
+    def convert_tokens_to_ids(self, tokens):
+        if self.sp_model:
+            return [self.sp_model.PieceToId(token) for token in tokens]
+        else:
+            return self.convert_by_vocab(self.vocab, tokens)
+
+    def convert_ids_to_tokens(self, ids):
+        if self.sp_model:
+            return [self.sp_model.IdToPiece(id_) for id_ in ids]
+        else:
+            return self.convert_by_vocab(self.inv_vocab, ids)

@@ -17,7 +17,7 @@ class AlbertGroup(nn.Module):
         layer_hidden_states = ()
         layer_attentions = ()
 
-        for layer_index, albert_layer in enumerate(self.albert_layers):
+        for layer_index, albert_layer in enumerate(self.albert_groups):
             layer_output = albert_layer(hidden_states, attention_mask, head_mask[layer_index])
             hidden_states = layer_output[0]
 

@@ -265,7 +265,7 @@ def create_training_instances(input_file, tokenizer, opt):
         tokens = tokenizer._tokenize(line)
         if tokens:
             all_documents[-1].append(tokens)
-    print(' ')
+
     # Remove empty documents
     all_documents = [x for x in all_documents if x]
     random.shuffle(all_documents)
@@ -276,9 +276,9 @@ def create_training_instances(input_file, tokenizer, opt):
     for document_index in tqdmbar:
         instances.extend(
             create_instances_from_document(all_documents, document_index, vocab_words, opt))
-    print(' ')
+
     ex_idx = 0
-    while ex_idx < 5:
+    while ex_idx < min(5, len(instances)):
         instance = instances[ex_idx]
         logger.info("-------------------------Example-----------------------")
         logger.info(f"id: {ex_idx}")
@@ -321,10 +321,10 @@ def prepare(opt):
             for file_idx in range(len(files)):
                 file_path = files[file_idx]
                 file_examples = create_training_instances(input_file=file_path, tokenizer=tokenizer, opt=opt)
-                file_examples = [instance for instance in file_examples]
+                file_examples = [json.dumps(instance) for instance in file_examples]
                 for instance in file_examples:
-                    fw.write(str(instance) + '\n')
-                    num_instances += 1
+                     fw.write(str(instance) + '\n')
+                     num_instances += 1
         metrics_file = data_path / f"{opt.data_name}_file_{idx}_metrics.json"
         print(f"num_instances: {num_instances}")
         with metrics_file.open('w') as metrics_file:

@@ -16,7 +16,7 @@ class SelfAttention(nn.Module):
         self.num_attention_heads = config.num_attention_heads
         self.dim_per_head = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.dim_per_head
-
+        self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         # Sub-Modules
         self.linear_query = nn.Linear(config.hidden_size, self.all_head_size)
         self.linear_keys = nn.Linear(config.hidden_size, self.all_head_size)

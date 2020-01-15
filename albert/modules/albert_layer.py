@@ -14,8 +14,8 @@ class AlbertLayer(nn.Module):
         self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
-        attention_out = self.attention(hidden_states, attention_mask, head_mask)
-        attention_out = self.layer_norm(attention_out[0] + hidden_states)
-        hidden_states = self.feed_forward(attention_out[0])
-        outputs = (hidden_states, ) + attention_out[1:]
+        attention_outs = self.attention(hidden_states, attention_mask, head_mask)
+        attention_out = self.layer_norm(attention_outs[0] + hidden_states)
+        hidden_states = self.feed_forward(attention_out)
+        outputs = (hidden_states,  attention_outs[1:])
         return outputs

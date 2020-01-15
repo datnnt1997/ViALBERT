@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 from albert.models.model import AlbertModel
@@ -7,9 +8,9 @@ from albert.modules import PreTrainingHeads
 class AlbertForPreTraining(nn.Module):
     def __init__(self, config):
         super(AlbertForPreTraining, self).__init__()
+        self.config = config
         self.albert = AlbertModel(config)
         self.classifier = PreTrainingHeads(config)
-
         self.init_weights()
 
     def _init_weights(self, module):
@@ -25,12 +26,41 @@ class AlbertForPreTraining(nn.Module):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
+    def _tie_or_clone_weights(self, first_module, second_module):
+        """ Tie or clone module weights depending of weither we are using TorchScript or not
+        """
+
+        if self.config.torchscript:
+            first_module.weight = nn.Parameter(second_module.weight.clone())
+        else:
+            first_module.weight = second_module.weight
+
+
+        if hasattr(first_module, 'bias') and first_module.bias is not None:
+            first_module.bias.data = torch.nn.functional.pad(
+                first_module.bias.data,
+                (0, first_module.weight.shape[0] - first_module.bias.shape[0]),
+                'constant',
+                0
+            )
     def tie_weights(self):
         """ Make sure we are sharing the input and output embeddings.
             Export to TorchScript can't handle parameter sharing so we are cloning them instead.
         """
-        self._tie_or_clone_weights(self.cls.predictions.decoder,
-                                   self.albert.embeddings.token_embeddings)
+        first_module = self.classifier.mask_predictions.decoder
+        second_module = self.albert.embeddings.token_embeddings
+        if self.config.torchscript:
+            first_module.weight = nn.Parameter(second_module.weight.clone())
+        else:
+            first_module.weight = second_module.weight
+
+        if hasattr(first_module, 'bias') and first_module.bias is not None:
+            first_module.bias.data = torch.nn.functional.pad(
+                first_module.bias.data,
+                (0, first_module.weight.shape[0] - first_module.bias.shape[0]),
+                'constant',
+                0
+            )
 
     def init_weights(self):
         """ Initialize and prunes weights if needed."""
@@ -53,11 +83,8 @@ class AlbertForPreTraining(nn.Module):
                 masked_lm_labels=None,
                 next_sentence_label=None):
 
-        outputs = self.bert(input_ids,
-                            attention_mask=attention_mask,
-                            token_type_ids=token_type_ids,
-                            position_ids=position_ids,
-                            head_mask=head_mask)
+        outputs = self.albert(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids,
+                              position_ids=position_ids, head_mask=head_mask)
 
         sequence_output, pooled_output = outputs[:2]
         prediction_scores, seq_relationship_score = self.classifier(sequence_output, pooled_output)
