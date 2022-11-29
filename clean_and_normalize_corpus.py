@@ -20,6 +20,8 @@ def run(inpath: str, outpath: str):
             count += 1
             if count % 10000 == 0:
                 print(f"Processed {count} lines")
+                print(f"Result text: ")
+                print(f"\t{tokenized_sents}")
 
 
 if __name__ == "__main__":

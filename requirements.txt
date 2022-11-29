@@ -1,1 +1,6 @@
 sentencepiece
+pyvi
+underthesea
+tensorflow-gpu==1.15
+tensorflow_hub==0.7
+protobuf==3.20.1
